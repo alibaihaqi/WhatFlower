@@ -9,11 +9,16 @@
 import UIKit
 import CoreML
 import Vision
+import Alamofire
+import SwiftyJSON
+import SDWebImage
 
 class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
 
     @IBOutlet weak var imageViewML: UIImageView!
+    @IBOutlet weak var extractInfo: UILabel!
     
+    let wikipediaURL = "https://en.wikipedia.org/w/api.php"
     let imagePicker = UIImagePickerController()
     
     override func viewDidLoad() {
@@ -42,16 +47,7 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
             if let flowerName = results.first?.identifier {
                 self.navigationItem.title = flowerName.capitalized
                 
-                let parameters = [
-                    "format": "json",
-                    "action": "query",
-                    "prop": "extracts",
-                    "exintro": "",
-                    "explaintext": "",
-                    "titles": "\(flowerName)"
-                ]
-                
-                print(parameters)
+                self.requestInfo(flowerName: flowerName)
             }
         }
         
@@ -64,9 +60,38 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
         }
     }
     
+    func requestInfo (flowerName: String) {
+        
+        let parameters: [String: String] = [
+            "format": "json",
+            "action": "query",
+            "prop": "extracts|pageimages",
+            "exintro": "",
+            "explaintext": "",
+            "titles": "\(flowerName)",
+            "indexpageids": "",
+            "redirects": "1",
+            "pithumbsize": "500"
+        ]
+        
+        Alamofire.request(wikipediaURL, method: .get, parameters: parameters).responseJSON { (response) in
+            if response.result.isSuccess {
+                
+                let result: JSON = JSON(response.result.value)
+                
+                let indexpage = result["query"]["pageids"][0].stringValue
+                let extracts = result["query"]["pages"][indexpage]["extract"]
+                let flowerURL = result["query"]["pages"][indexpage]["thumbnail"]["source"].stringValue
+                
+                
+                self.imageViewML.sd_setImage(with: URL(string: flowerURL))
+                self.extractInfo.text = extracts.stringValue
+            }
+        }
+    }
+    
     func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
         if let editedImage = info[UIImagePickerController.InfoKey.editedImage] as? UIImage {
-            imageViewML.image = editedImage
             
             guard let ciImage = CIImage(image: editedImage) else {
                 fatalError("Failed convert image to CIImage")
